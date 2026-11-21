@@ -65,6 +65,7 @@ npm run dev
 | 分区扫描 | `partition_scan` | 扫描报告 | 报告时间、目标表、分区总数 |
 | 配置迁移 | `config_migration` | 迁移任务 | 任务名称、源环境、目标环境 |
 | Schema演进 | `schema_evolution` | 变更记录 | 变更时间、目标表、变更类型 |
+| 消费迁移演练 | `consumer_migration` | 消费迁移演练 | 消费任务、数据表、目标列版本、读取契约 |
 | 回填追踪 | `backfill_tracker` | 回填进度 | 追踪ID、回填任务、当前分区 |
 | 成本分析 | `cost_analysis` | 成本快照 | 快照日期、管线标识、计算时长 |
 | 告警策略 | `alert_policy` | 告警规则 | 规则名称、监控对象、告警条件 |
@@ -76,6 +77,8 @@ npm run dev
   `frontend/src/domain/<模块>.ts`，用于承载真实业务差异并维持36题位容量。
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。
+- 消费迁移演练的接口在 `/api/consumer-migration/*`，通用资源列表仍是 `/api/consumer_migration`。
+- 后端用例：`cd backend && .venv/bin/python -m unittest discover -s tests -v`。
 
 领域：数据工程
 子方向：数仓与数据湖

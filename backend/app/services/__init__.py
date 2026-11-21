@@ -17,6 +17,7 @@ from app.services.template_store import TemplateStoreService
 from app.services.partition_scan import PartitionScanService
 from app.services.config_migration import ConfigMigrationService
 from app.services.schema_evolution import SchemaEvolutionService
+from app.services.consumer_migration import ConsumerMigrationService
 from app.services.backfill_tracker import BackfillTrackerService
 from app.services.cost_analysis import CostAnalysisService
 from app.services.alert_policy import AlertPolicyService
@@ -37,6 +38,7 @@ SERVICES: dict[str, BaseModuleService] = {
     "partition_scan": PartitionScanService(),
     "config_migration": ConfigMigrationService(),
     "schema_evolution": SchemaEvolutionService(),
+    "consumer_migration": ConsumerMigrationService(),
     "backfill_tracker": BackfillTrackerService(),
     "cost_analysis": CostAnalysisService(),
     "alert_policy": AlertPolicyService(),

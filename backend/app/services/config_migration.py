@@ -17,6 +17,7 @@ class ConfigMigrationService(BaseModuleService):
     ENTITY = "迁移任务"
     OPERATION_TERM = "迁移"
     LIST_FIELDS = ["任务名称", "源环境", "目标环境", "迁移范围", "依赖检查", "回滚方案", "执行窗口"]
+    EXTRA_FIELDS = ["switch_entry_ids"]
     REQUIRED_FIELDS = ["任务名称", "源环境", "目标环境"]
     STATUS_ORDER = ["待迁移", "迁移中", "已完成", "已回滚", "迁移失败"]
     ACTION_RULES = {"开始迁移": "待迁移", "完成迁移": "迁移中", "回滚迁移": "迁移中", "标记失败": "迁移中"}
@@ -142,6 +143,96 @@ class ConfigMigrationService(BaseModuleService):
             "recent_rollback_count": len(recent_rollbacks),
             "safe_to_migrate": has_rollback,
             "validated_at": datetime.now().isoformat(),
+        }
+
+    def build_switch_entries(
+        self,
+        consumer_key: str | None = None,
+        source_env: str = "dev",
+        target_env: str = "prod",
+    ) -> dict[str, Any]:
+        """把已确认的消费方读取契约转换成可提交的切换条目。
+
+        契约来自消费迁移演练：只有演练通过并被确认的消费任务才会生成条目。
+        条目里同时保留切换值与回滚快照（原列、原数据源、原输入分区）。
+        """
+        from app.services import service_for
+
+        migration = service_for("consumer_migration")
+        if migration is None:
+            return {"error": "消费迁移服务未注册"}
+        consumers = migration.list_consumers()
+        if consumer_key:
+            consumers = [c for c in consumers if c["consumer_key"] == consumer_key]
+            if not consumers:
+                return {"error": f"消费任务 {consumer_key} 不存在"}
+
+        entries: list[dict[str, Any]] = []
+        skipped: list[dict[str, str]] = []
+        for consumer in consumers:
+            if consumer["status"] not in ("已确认", "已切换"):
+                skipped.append({
+                    "consumer_key": consumer["consumer_key"],
+                    "reason": f"读取契约为 {consumer['status']}，尚未确认",
+                })
+                continue
+            entry = migration.create_switch(
+                consumer["consumer_key"],
+                source_env=source_env,
+                target_env=target_env,
+            )
+            entries.append({
+                "switch_id": entry["switch_id"],
+                "consumer_key": entry["consumer_key"],
+                "consumer_name": entry["consumer_name"],
+                "table": entry["table"],
+                "source_env": entry["source_env"],
+                "target_env": entry["target_env"],
+                "column_version": entry["column_version"],
+                "amount_type": entry["amount_type"],
+                "data_source": entry["data_source"],
+                "input_partitions": entry["input_partitions"],
+                "columns": [
+                    {"name": c["name"], "type": c["type"]}
+                    for c in entry["verified_columns"]
+                ],
+                "rollback_snapshot": {
+                    "column_version": entry["rollback_column_version"],
+                    "amount_type": entry["rollback_amount_type"],
+                    "data_source": entry["rollback_data_source"],
+                    "input_partitions": entry["rollback_input_partitions"],
+                    "columns": [
+                        {"name": c["name"], "type": c["type"]}
+                        for c in entry["rollback_columns"]
+                    ],
+                },
+                "status": entry["status"],
+            })
+
+        # 本地迁移任务记录，便于配置迁移页面看到本次生成的条目。
+        rows = store.rows(self.MODULE)
+        rows.append({
+            "id": max((int(r.get("id", 0)) for r in rows), default=0) + 1,
+            "status": "待迁移",
+            "pending": True,
+            "abnormal": False,
+            "任务名称": f"消费读取契约切换（{len(entries)}条）",
+            "源环境": source_env,
+            "目标环境": target_env,
+            "迁移范围": "consumer_migration 读取契约",
+            "依赖检查": "通过" if not skipped else f"跳过 {len(skipped)} 个未确认消费任务",
+            "回滚方案": "按切换条目内 rollback_snapshot 恢复列、数据源与输入分区",
+            "执行窗口": datetime.now().strftime("%Y-%m-%dT%H:%M"),
+            "switch_entry_ids": [entry["switch_id"] for entry in entries],
+        })
+
+        return {
+            "source_env": source_env,
+            "target_env": target_env,
+            "entry_count": len(entries),
+            "entries": entries,
+            "skipped": skipped,
+            "generated_at": datetime.now().isoformat(),
         }
 
     def run_action(self, entry_id: int, action: str) -> tuple[dict[str, Any] | None, str]:

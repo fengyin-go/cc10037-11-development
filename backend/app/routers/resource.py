@@ -88,6 +88,9 @@ def create_entry(module: str, payload: EntryPayload) -> ActionResult:
     entry, missing = service.create_entry(payload.values)
     if missing:
         return ActionResult(ok=False, message=f"缺少必填字段：{'、'.join(missing)}")
+    if entry is None:
+        return ActionResult(
+            ok=False, message=f"{service.ENTITY}由演练注册表维护，不支持直接登记")
     return ActionResult(ok=True, message=f"{service.ENTITY}已登记", entry=entry)
 
 
